@@ -1,1 +1,96 @@
-
+#include <pthread.h>  
+#include <stdio.h>  
+#include <unistd.h>  
+#include <stdlib.h>  
+#include <semaphore.h>  
+#include <sys/time.h>  
+#include <math.h>  
+#define CHAIRS 5 //椅子数  
+sem_t customers; //等待服务的顾客信号量  
+sem_t barbers;  //等待顾客的理发师信号量  
+pthread_mutex_t mutex; //互斥变量  
+int waiting = 0; //正在等待的顾客数  
+void *barber(void *arg);
+void *customer(void *num);
+void cut_hair(void);
+double timediff(struct timeval i, struct timeval j);
+void seed_random(void);
+double flat(void);
+double normal(void);
+double bursty(void);
+int main()
+{
+	int i;
+	seed_random();
+	pthread_t barber_t, customer_t;
+	int error;
+	error = pthread_create(&barber_t, NULL, barber, NULL);//创建理发师线程  
+	if (error != 0) {
+		printf("pthread_create is not created.../n");
+		return -1;
+	}
+	while (1) {
+		usleep(30000);//等待时间如果小于理发师理发时间则会出现等待者过多,否则不会出现等待者过多的现象  
+		error = pthread_create(&customer_t, NULL, customer, NULL);//创建顾客线程  
+		if (error != 0) {
+			printf("pthread_create is not created.../n");
+			return -1;
+		}
+	}
+}
+double timediff(struct timeval now, struct timeval earlier)
+{
+	if (now.tv_sec == earlier.tv_sec)
+		return (now.tv_usec - earlier.tv_usec) / 1000000.0;
+	else
+		return (1000000 * (now.tv_sec - earlier.tv_sec) + now.tv_usec - earlier.tv_usec) / 1000000.0;
+}
+void *barber(void *arg)
+{
+	while (1)
+	{
+		sem_wait(&customers);//顾客信号量-1  
+		pthread_mutex_lock(&mutex);
+		waiting = waiting - 1;
+		sem_post(&barbers);//  
+		pthread_mutex_unlock(&mutex);
+		cut_hair();//理发  
+	}
+}
+void cut_hair(void)
+{
+	printf("  Barber:I am cutting the customer's hair.../n");
+	usleep(100000);//理发时间  
+	printf("  Barber:done./n");
+}
+void *customer(void *num)
+{
+	pthread_mutex_lock(&mutex);
+	if (waiting<CHAIRS)
+	{
+		waiting = waiting + 1;
+		sem_post(&customers);
+		pthread_mutex_unlock(&mutex);
+		sem_wait(&barbers);
+	}
+	else
+	{
+		printf("  Waiter is too much.../n");
+		pthread_mutex_unlock(&mutex);
+	}
+	//释放占用的资源  
+}
+void seed_random(void)
+{
+	struct timeval randtime;
+	unsigned short xsub1[3];
+	gettimeofday(&randtime, (struct timezone *)0);
+	xsub1[0] = (ushort)randtime.tv_usec;
+	xsub1[1] = (ushort)(randtime.tv_usec >> 16);
+	xsub1[2] = (ushort)(getpid());
+	seed48(xsub1);
+}
+double flat()
+{
+	return drand48() / 5;
+}
